@@ -1,4 +1,4 @@
-#indef KONFIGURACJA_H
+#ifndef KONFIGURACJA_H
 #define KONFIGURACJA_H
 
 
