@@ -9,7 +9,8 @@ int main() {
         perror("Nie udało się otworzyć pliku logu kasjera");
         return 1;
     }
-
+    sleep(100);
+    
     while (1) {
         write(log_fd, "Kasjer: Sprzedano bilet\n", 24);
         sleep(2);
