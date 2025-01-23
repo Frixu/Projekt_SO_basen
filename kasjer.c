@@ -16,6 +16,6 @@ int main() {
         sleep(2);
     }
 
-    close(log_fd);
+   
     return 0;
 }
