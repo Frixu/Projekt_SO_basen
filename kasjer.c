@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -29,6 +28,11 @@ void inicjalizuj_semafory(int sem_id) {
             perror("Kasjer: Nie udalo sie zainicjowac semafora brodzik");
             exit(1);
     }
+
+    if(semctl(sem_id, SEM_LOCK, SETVAL, 1) == -1){
+            perror("Kasjer: Nie udalo sie zaincjalizowac semafora synchronizacyjnego");
+            exit(1);
+    }
     //semctl(sem_id, SEM_LOCK, SETVAL, 1);//Semafor do synchronizacji licznika
     printf("Kasjer: Semafory zostaly zainicjowane.\n");
 }
@@ -50,40 +54,68 @@ int main() {
         return 1;
     }
 
-   key_t shm_key = ftok(PATHNAME, 'L');
-   if (shm_key == -1) {
+   key_t shm_key_numer = ftok(PATHNAME, 'L');
+   if (shm_key_numer == -1) {
    perror("Kasjer: Nie udało się wygenerować klucza pamięci współdzielonej");
    usun_semafory(sem_id);
    exit(1);
    }
 
-    int shm_id = shmget(shm_key, MAX_KLIENCI * sizeof(int), IPC_CREAT | 0666);
-    if (shm_id == -1) {
+    int shm_id_numer = shmget(shm_key_numer, MAX_KLIENCI * sizeof(int), IPC_CREAT | 0666);
+    if (shm_id_numer == -1) {
         perror("Kasjer: Nie udalo sie utworzyc pamieci wspoldzielonej");
         usun_semafory(sem_id);
         return 1;
     }else{
-            printf("Kasjer: Pamiec wspoldzielona zainicjalizowana\n");
-    }
-    /*LicznikDanych *licznik = (LicznikDanych *)shmat(shm_id, NULL, 0);
-    if (licznik == (void *)-1) {
-        perror("Kasjer: Nie udało się połączyć z pamięcią współdzieloną");
-        return 1;
+            printf("Kasjer: Pamiec wspoldzielona zainicjalizowana klient_numer\n");
     }
 
-    licznik->licznik_klientow = 0; // Inicjalizacja licznika klientó
-    printf("Kasjer: Licznik klientow: %d\n", licznik->licznik_klientow);
-*/
+    key_t shm_key_licznik = ftok(PATHNAME, 'K');
+    if(shm_key_licznik == -1){
+            perror("Kasjer: Nie udalo sie wygenerowac klucza do licznika");
+            usun_semafory(sem_id);
+            exit(1);
+    }
+    int shm_id_licznik = shmget(shm_key_licznik, sizeof(int), IPC_CREAT | 0666);
+    if(shm_id_licznik == -1){
+            perror("Kasjer: Nie udalo sie utworzyc pamieci wspoldzielonej");
+            usun_semafory(sem_id);
+            exit(1);
+    }
+
+    int *licznik_klientow = shmat(shm_id_licznik, NULL, 0);
+    if (licznik_klientow == (void *)-1) {
+    perror("Kasjer: Nie udało się dołączyć do pamięci współdzielonej");
+    usun_semafory(sem_id);
+    exit(1);
+    }
+
+    // Inicjalizacja licznika klientów
+    *licznik_klientow = 0;
+    printf("Kasjer: Licznik klientów został zainicjalizowany.\n");
+
     inicjalizuj_semafory(sem_id);
 
     printf("Kasjer: Oczekiwanie na klientow\n");
-    sleep(0);
+
+    sleep(10);
+
+    while(*licznik_klientow > 0){
+            printf("Liczba klientow: %d\n", *licznik_klientow);
+            sleep(10);
+    }
 
     // Usunięcie pamięci współdzielonej
-    if (shmctl(shm_id, IPC_RMID, NULL) == -1) {
-        perror("Kasjer: Nie udało się usunąć pamięci współdzielonej");
+    if (shmctl(shm_id_numer, IPC_RMID, NULL) == -1) {
+        perror("Kasjer: Nie udało się usunąć pamięci współdzielone - numer\n");
     } else {
-        printf("Kasjer: Pamięć współdzielona została usunięta.\n");
+        printf("Kasjer: Pamięć współdzielona została usunięt - numer\n");
+    }
+
+    if(shmctl(shm_id_licznik, IPC_RMID, NULL) == -1){
+            perror("Kasjer: Nie udalo sie usunac pamieci wspoldzielonej - licznik");
+    }else{
+            printf("Kasjer: Pamiec wspoldzielona zostala usunieta\n");
     }
 
     usun_semafory(sem_id);
