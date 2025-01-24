@@ -27,8 +27,17 @@ double oblicz_srednia(DaneRekreacyjny *dane) {
     return (double)dane->suma_wiekow / dane->liczba_osob;
 }
 
-void wejdz_na_basen(int wiek, int sem_id, int sem_num, int is_vip, int numer, DaneRekreacyjny *rekreacyjny, int is_opiekun) {
+void wejdz_na_basen(int wiek, int sem_id, int sem_num, int is_vip, int numer, DaneRekreacyjny *rekreacyjny, int is_opiekun, int *licznik_klientow) {
     int proby = 0;
+
+    struct sembuf lock = {SEM_LOCK, -1, 0}; // Zablokowanie semafora
+    struct sembuf unlock = {SEM_LOCK, 1, 0}; // Odblokowanie semafora
+
+    // Zwiększenie licznika klientów
+    semop(sem_id, &lock, 1);
+    (*licznik_klientow)++;
+    //printf("Klient #%d (wiek %d): Wchodzi na basen. Liczba klientów: %d\n", numer, wiek, *licznik_klientow);
+    semop(sem_id, &unlock, 1);
 
     while (proby <= MAX_PROBY) {
 
@@ -103,15 +112,17 @@ void wejdz_na_basen(int wiek, int sem_id, int sem_num, int is_vip, int numer, Da
         sleep(CZAS_BILETU);
 
         // Klient opuszcza basen
-        op.sem_op = 1;
-        if(semop(sem_id, &op, 1) == -1){
+
+        if(semop(sem_id, &lock, 1) == -1){
                 perror("Blad przy zwalnianiu semafora");
         }else{
+                (*licznik_klientow)--;
                 if (is_vip) {
                          printf("%sVIP #%d (wiek %d): Opuszcza basen %s%s\n",YELLOW, numer, wiek, nazwa_basenu[sem_num], RESET);
                 }else{
                         printf("Klient #%d (wiek %d): Opuszcza basen %s\n", numer, wiek, nazwa_basenu[sem_num]);
                 }
+                semop(sem_id, &unlock, 1);
         }
 
 
@@ -133,37 +144,55 @@ void wejdz_na_basen(int wiek, int sem_id, int sem_num, int is_vip, int numer, Da
 int main() {
     srand(getpid());
 
-    key_t shm_key = ftok(PATHNAME, 'L');
-    if(shm_key == -1){
+    //Pamiec wspoldzielona do numeru klienta
+    key_t shm_key_numer = ftok(PATHNAME, 'L');
+    if(shm_key_numer == -1){
             perror("Klient: Nie udało się wygenerować klucza pamięci współdzielonej");
             exit(1);
     }
 
-    printf("Wygenerowany klucz: %d\n", shm_key);
+    printf("Wygenerowany klucz: %d\n", shm_key_numer);
 
+    int shm_id_numer = shmget(shm_key_numer, MAX_KLIENCI * sizeof(int), 0666 | IPC_CREAT);
+    if(shm_id_numer == -1){
+            perror("Klient: Blad podczas tworzenia pamieci wspoldzielonej dla klient_numer");
+            exit(1);
+    }
 
-    int sem_id = semget(SEM_KEY, 3, 0 | IPC_CREAT);
+    int *klient_numer = shmat(shm_id_numer, NULL, 0);
+    if(klient_numer == (void *)-1){
+            perror("Klient: Blad podczas dolaczania pamieci wspoldzielonej");
+            exit(1);
+    }
+    *klient_numer = 0;
+
+    int sem_id = semget(SEM_KEY, 4, 0 | IPC_CREAT);
     if (sem_id == -1) {
         perror("Błąd semaforów");
         return 1;
     }
 
-    if (MAX_KLIENCI <= 0) {
-    fprintf(stderr, "Błąd: MAX_KLIENCI musi być większe od 0.\n");
-    exit(1);
+
+    //Pamiec wspoldzielona do licznika klientow
+    key_t shm_key_licznik = ftok(PATHNAME, 'K');
+    if(shm_key_licznik == -1){
+            perror("Klient: Nie udalo sie wygenerowac klucza do pamieci wspoldzielonej-licznik");
+            exit(1);
     }
 
-    int shm_id = shmget(shm_key, MAX_KLIENCI * sizeof(int), 0666 | IPC_CREAT);
-    if(shm_id == -1){
-            perror("Blad podczas tworzenia pamieci wspoldzielonej dla klient_numer");
+    int shm_id_licznik = shmget(shm_key_licznik, sizeof(int), 0666 | IPC_CREAT);
+    if (shm_id_licznik == -1) {
+        perror("Klient: Nie udało się utworzyć pamięci współdzielonej dla licznika klientów");
+        exit(1);
+    }
+    int *licznik_klientow = (int *)shmat(shm_id_licznik, NULL, 0);
+    if(licznik_klientow == (void *)-1){
+            perror("Klient: Nie udalo sie dolaczyc pamieci wspoldzielonej licznika klientow");
             exit(1);
     }
-    int *klient_numer = shmat(shm_id, NULL, 0);
-    if(klient_numer == (void *)-1){
-            perror("Blad podczas dolaczania pamieci wspoldzielonej dla klient_numer");
-            exit(1);
-    }
-    *klient_numer = 0;
+
+    *licznik_klientow = 0;
+
 
     // Pamięć współdzielona dla danych o basenie rekreacyjnym
     key_t rek_key = ftok(PATHNAME, 'R');
@@ -212,23 +241,34 @@ int main() {
                         int wiek_opiekuna = rand() % 50 + 30; // Opiekun ma wiek 30-70 lat
                         printf("%sOpiekun dla dziecka #%d: Wiek opiekuna %d%s\n", GREEN, numer, wiek_opiekuna, RESET);
 
-                        wejdz_na_basen(wiek_opiekuna, sem_id, SEM_BRODZIK, is_vip, ++(*klient_numer), rekreacyjny, 1);
+                        wejdz_na_basen(wiek_opiekuna, sem_id, SEM_BRODZIK, is_vip, ++(*klient_numer), rekreacyjny, 1, licznik_klientow);
                         exit(0); // Proces opiekuna kończy działanie
             }
         }
 
-            wejdz_na_basen(wiek, sem_id, basen, is_vip, numer, rekreacyjny, 0);
+            wejdz_na_basen(wiek, sem_id, basen, is_vip, numer, rekreacyjny, 0, licznik_klientow);
             exit(0);
         }
-        sleep(rand() % 2);
+        sleep(rand() % 5);
     }
 
-    for (int i = 0; i < 20; i++){
+    for (int i = 0; i < MAX_KLIENCI; i++){
             wait(NULL);
     }
 
-    //usuwanie pamieci wspoldzielonej
-    shmctl(shm_id, IPC_RMID, NULL);
+    // Usuwanie pamięci współdzielonej
+    if (shmdt(klient_numer) == -1) {
+        perror("Blad podczas odlaczania pamieci wspoldzielonej klient_numer");
+    }
+    if (shmdt(rekreacyjny) == -1) {
+        perror("Blad podczas odlaczania pamieci wspoldzielonej rekreacyjny");
+    }
+    if (shmdt(licznik_klientow) == -1) {
+        perror("Blad podczas odlaczania pamieci wspoldzielonej licznik_klientow");
+    }
+
+    shmctl(shm_id_numer, IPC_RMID, NULL);
     shmctl(rek_id, IPC_RMID, NULL);
+    shmctl(shm_id_licznik, IPC_RMID, NULL);
     return 0;
 }
