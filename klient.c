@@ -36,7 +36,6 @@ void wejdz_na_basen(int wiek, int sem_id, int sem_num, int is_vip, int numer, Da
     // Zwiększenie licznika klientów
     semop(sem_id, &lock, 1);
     (*licznik_klientow)++;
-    //printf("Klient #%d (wiek %d): Wchodzi na basen. Liczba klientów: %d\n", numer, wiek, *licznik_klientow);
     semop(sem_id, &unlock, 1);
 
     while (proby <= MAX_PROBY) {
