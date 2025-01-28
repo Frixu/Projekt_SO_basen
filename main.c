@@ -105,11 +105,12 @@ int main() {
         exit(1);
     }
 
+    //Czekanie az wszystkie baseny beda puste
     if (kasjer_pid == 0) { // Dziecko - kasjer
         while (1) {
             sleep(10); // Sprawdzanie co 10 sekund
             if (czy_wszystkie_baseny_puste(sem_id)) {
-                printf("✅ Kasjer: Wszystkie baseny są puste. Kończę pracę.\n");
+                printf("Kasjer: Wszystkie baseny są puste. Kończę pracę.\n");
                 break;
             }
         }
@@ -123,16 +124,7 @@ int main() {
 
     //Czekamy na zakonczenie procesu kasjera
     wait(NULL);
-
-        // Oczekiwanie, aż wszystkie baseny będą puste
-        while (1) {
-                sleep(10); // Co 10 sekund sprawdzamy liczniki
-                if (czy_wszystkie_baseny_puste(sem_id)) {
-                printf("✅ Kasjer: Wszystkie baseny są puste. Kończę pracę.\n");
-                break;
-                }
-        }
-
+        
          // Usuwanie pamięci współdzielonej
         usun_pamiec_wspoldzielona(klient_numer, rekreacyjny, shm_id, rek_id);
 
