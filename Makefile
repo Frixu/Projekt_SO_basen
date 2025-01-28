@@ -1,25 +1,17 @@
 CC = gcc
-CFLAGS = -Wall -g -lpthread
+CFLAGS = -Wall -g
 
-# Programy
-EXEC_KASJER = kasjer
-EXEC_KLIENT = klient
+# Program wynikowy
+EXEC = main
 
+# Zasada do kompilacji main.c
+$(EXEC): main.c kasjer.c klient.c utils.c
+        $(CC) $(CFLAGS) -o $(EXEC) main.c kasjer.c klient.c utils.c
 
-kasjer: kasjer.c
-        $(CC) $(CFLAGS) -o kasjer kasjer.c
+# Uruchamianie procesu
+run: $(EXEC)
+        ./$(EXEC)
 
-klient: klient.c
-        $(CC) $(CFLAGS) -o klient klient.c
-
-ratownik: ratownik.c
-        $(CC) $(CFLAGS) -o ratownik ratownik.c
-
-run: kasjer klient ratownik
-        ./$(EXEC_KASJER) &
-        sleep 1
-        ./$(EXEC_KLIENT)
-
+# Czyszczenie plików wynikowych
 clean:
-        rm -f kasjer klient
-
+        rm -f $(EXEC)
