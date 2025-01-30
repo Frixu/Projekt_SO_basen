@@ -3,29 +3,45 @@
 #include <unistd.h>
 #include <sys/sem.h>
 #include <sys/wait.h>
+#include <signal.h>
 #include "klient.h"
 #include "kasjer.h"
+#include "ratownik.h"
 #include "utils.h"
 #include "konfiguracja.h"
 
 #define PATHNAME "./konfiguracja.h"
 
+int sem_id, shm_id, rek_id;
+int *klient_numer;
+DaneRekreacyjny *rekreacyjny;
+
 int main() {
         srand(getpid());//Inicjalizacja generatora liczb losowych
 
+        //Rejestracja sygnałów
+        signal(SIGTERM, zamkniecie_obiektu);
+        signal(SIGINT, handler_sigint);
+
+        //Tworznie kluczy
+        key_t sem_key = get_sem_key(PATHNAME, 'A');
+        key_t shm_key = get_shm_key(PATHNAME, 'B');
+
         // Tworzenie semaforów
-        int sem_id = create_semaphore(SEM_KEY, 3);
+        int sem_id = create_semaphore(sem_key, 3);
 
         // Inicjalizacja semaforów
         inicjalizuj_semafory(sem_id);
 
          // Tworzenie pamięci współdzielonej dla numeru klienta
-    key_t shm_key = ftok(PATHNAME, PROJECT_ID);
     int shm_id = shmget(shm_key, MAX_KLIENCI * sizeof(int), 0666 | IPC_CREAT);
     if (shm_id == -1) {
         perror("Klient: Błąd przy tworzeniu pamięci współdzielonej dla numeru klienta");
         exit(1);
+    }else{
+            printf("Pamiec wspoldzielona zaincjowana\n");
     }
+
     int *klient_numer = shmat(shm_id, NULL, 0);
     if (klient_numer == (void *)-1) {
         perror("Klient: Błąd przy łączeniu pamięci współdzielonej dla numeru klienta");
@@ -95,7 +111,7 @@ int main() {
             wejdz_na_basen(wiek, sem_id, basen, is_vip, numer, rekreacyjny, 0);
             exit(0);
         }
-        sleep(rand() % 2 + 1); // Losowy czas przed utworzeniem kolejnego procesu klienta
+        sleep(rand() % 3); // Losowy czas przed utworzeniem kolejnego procesu klienta
     }
 
     // Kasjer sprawdzający co jakiś czas, czy baseny są puste
@@ -105,7 +121,6 @@ int main() {
         exit(1);
     }
 
-    //Czekanie az wszystkie baseny beda puste
     if (kasjer_pid == 0) { // Dziecko - kasjer
         while (1) {
             sleep(10); // Sprawdzanie co 10 sekund
@@ -122,9 +137,9 @@ int main() {
         wait(NULL);
     }
 
-    //Czekamy na zakonczenie procesu kasjera
-    wait(NULL);
-        
+        //Czekamy na zakonczenie procesu kasjera
+        wait(NULL);
+
          // Usuwanie pamięci współdzielonej
         usun_pamiec_wspoldzielona(klient_numer, rekreacyjny, shm_id, rek_id);
 
