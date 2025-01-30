@@ -53,11 +53,17 @@ void wejdz_na_basen(int wiek, int sem_id, int sem_num, int is_vip, int numer, Da
 
         // Sprawdzenie czy basen jest otwarty (wartość semafora > 0)
         int sem_val = semctl(sem_id, sem_num, GETVAL);
-        while(sem_val == 0){
-                printf("Klient #%d: Basen %s zamknięty, próbuję inny...\n", numer, nazwa_basenu[sem_num]);
+        if (sem_val == 0){
+                if(is_vip){
+                        printf("%sVIP #%d (wiek: %d): Basen zamkniety, przekierowanie na inny basen%s\n", YELLOW, numer, wiek, RESET);
+                }else{
+                        printf("Klient #%d: Basen %s zamknięty, próbuję inny...\n", numer, nazwa_basenu[sem_num]);
+                }
                 sem_num = (sem_num + 1) % 3; // Przekierowanie na inny basen
-                sleep(2);
+                sleep(1);
+                proby++;
         }
+
 
         // Dzieci poniżej 10 lat mogą korzystać tylko z brodzika lub basenu rekreacyjnego (od 5 lat)
          if (sem_num == SEM_BRODZIK && wiek > 10 && !is_opiekun) {
