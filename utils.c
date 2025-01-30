@@ -15,6 +15,15 @@ key_t get_shm_key(const char *pathname, int project_id) {
     return shm_key;
 }
 
+// Funkcja do uzyskiwania klucza pamięci współdzielonej
+key_t get_sem_key(const char *pathname, int project_id) {
+    key_t sem_key = ftok(pathname, project_id);
+    if (sem_key == -1) {
+        perror("Blad przy generowaniu klucza pamieci wspoldzielonej");
+        exit(1);
+    }
+    return sem_key;
+}
 // Funkcja do tworzenia lub uzyskiwania semafora
 int create_semaphore(int sem_key, int num_semaphores) {
     int sem_id = semget(sem_key, num_semaphores, 0666 | IPC_CREAT);
