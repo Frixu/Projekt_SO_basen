@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -8,9 +7,27 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include "klient.h"
+#include "ratownik.h"
 #include "konfiguracja.h"
 
 const char *nazwa_basenu[] = {"Olimpijski", "Rekreacyjny", "Brodzik"};
+
+int numer_basen;
+int numer_klienta;
+
+void opusc_basen(int sig) {
+    printf("Klient %d: Otrzymalem sygnal ewakuacji, opuszczam basen %d!\n", numer_klienta, numer_basen);
+    exit(0); // Klient opuszcza program
+}
+
+void wroc_na_basen(int sig) {
+    printf("Klient %d: Otrzymalem sygnal, moge wrocic na basen %d!\n", numer_klienta, numer_basen);
+}
+
+void zamkniecie_obiektu(int sig){
+        printf("Klient %d: Centrum zamkniete opuszczam obiekt!\n", numer_klienta);
+        exit(0);
+}
 
 // Funkcja obliczająca średnią wieku w basenie rekreacyjnym
 double oblicz_srednia(DaneRekreacyjny *dane) {
@@ -20,53 +37,73 @@ double oblicz_srednia(DaneRekreacyjny *dane) {
     return (double)dane->suma_wiekow / dane->liczba_osob;
 }
 
-void inicjalizuj_sygnaly() {
-    signal(SIGUSR1, ewakuacja);
-}
-
 void wejdz_na_basen(int wiek, int sem_id, int sem_num, int is_vip, int numer, DaneRekreacyjny *rekreacyjny, int is_opiekun) {
-    inicjalizuj_sygnaly();
     int proby = 0;
+    numer_basen = sem_num;//przypisanie basenu do ktorego wchodzi klient
+    numer_klienta = numer;
+    setpgid(0, -numer_basen - 1);//Klient dolacza do grupy swojego basenu
+
+     // Rejestracja obsługi sygnałów
+    signal(SIGUSR1, opusc_basen);
+    signal(SIGUSR2, wroc_na_basen);
+    signal(SIGTERM, zamkniecie_obiektu);
+
     while (proby <= 5) {
         proby++;
 
         // Sprawdzenie czy basen jest otwarty (wartość semafora > 0)
         int sem_val = semctl(sem_id, sem_num, GETVAL);
-        if (sem_val == 0) {
-            printf("Klient #%d: Basen %d jest zamknięty, czekam...\n", numer, sem_num);
-            sleep(3);
-            continue;
+        while(sem_val == 0){
+                printf("Klient #%d: Basen %s zamknięty, próbuję inny...\n", numer, nazwa_basenu[sem_num]);
+                sem_num = (sem_num + 1) % 3; // Przekierowanie na inny basen
+                sleep(2);
         }
 
         // Dzieci poniżej 10 lat mogą korzystać tylko z brodzika lub basenu rekreacyjnego (od 5 lat)
-        if (sem_num == SEM_BRODZIK && wiek > 10 && !is_opiekun) {
+         if (sem_num == SEM_BRODZIK && wiek > 10 && !is_opiekun) {
+            if(is_vip){
+                    printf("%sVIP #%d (wiek %d): Za stary na brodzik zmieniam basen%s\n", YELLOW, numer, wiek, RESET);
+            }else{
             printf("Klient #%d (wiek %d): Za stary na brodzik, zmieniam basen.\n", numer, wiek);
-            if (wiek < 18) {
-                sem_num = 1;  // Przekierowanie na basen rekreacyjny
+            }
+            if(wiek < 18){
+                sem_num = 1; // Przekierowanie na basen rekreacyjny
                 continue;
-            } else {
-                sem_num = rand() % 2;  // Losowanie pomiędzy rekreacyjnym i olimpijskim
+            }else{
+                sem_num = rand() % 2; // Losowanie pomiędzy rekreacyjnym i olimpijskim
                 continue;
             }
         }
 
-        if (sem_num == SEM_BRODZIK && wiek < 3) {
-            printf("Klient #%d (wiek %d): Korzystam z brodzika i plywam w pampersach.\n", numer, wiek);
+        if(sem_num == SEM_BRODZIK && wiek < 3){
+                printf("Klient #%d (wiek %d): Korzystam z brodzika i plywam w pampersach.\n", numer, wiek);
         }
 
         // Dzieci poniżej 10 lat mogą korzystać tylko z brodzika lub basenu rekreacyjnego (od 5 lat)
         if (wiek < 5 && sem_num == SEM_REKREACYJNY) {
             printf("Klient #%d: Jesteś za młody na basen rekreacyjny (wiek: %d).\n", numer, wiek);
-            sem_num = SEM_BRODZIK;  // Przekierowanie na brodzik
+            sem_num = SEM_BRODZIK; // Przekierowanie na brodzik
             continue;
+        }
+
+
+        //Osoby ponizej 10 lat nie moga korzystac z basenu olimpijskiego
+        if(sem_num == SEM_OLIMPIJSKI && wiek < 18){
+                printf("Klient #%d (wiek %d): jestes za mlody na basen olipisjki\n", numer, wiek);
+                sem_num = rand() % 2 + 1;
+                continue;
         }
 
         // Sprawdzenie średniej wieku dla basenu rekreacyjnego
         if (sem_num == SEM_REKREACYJNY) {
             double srednia = oblicz_srednia(rekreacyjny);
             if ((srednia + wiek) / (rekreacyjny->liczba_osob + 1) > 40.0) {
-                printf("Klient #%d: Średnia wieku w basenie rekreacyjnym przekroczyłaby 40 lat, przekierowanie...\n", numer);
-                sem_num = (sem_num + 1) % 3;  // Przekierowanie na inny basen
+                if(is_vip){
+                        printf("%sVIP #%d (wiek: %d): Srednia wieku w basenie rekreacyjnym przekroczylaby 40 lat, przekierowanie...%s\n", YELLOW, numer, wiek, RESET);
+                }else{
+                        printf("Klient #%d: Średnia wieku w basenie rekreacyjnym przekroczyłaby 40 lat, przekierowanie...\n", numer);
+                }
+                sem_num = (rand() % 2) * 2;  // Przekierowanie na inny basen, losowanie miedzy 0 a 2
                 continue;
             }
         }
@@ -117,3 +154,4 @@ void wejdz_na_basen(int wiek, int sem_id, int sem_num, int is_vip, int numer, Da
         break;
     }
 }
+
