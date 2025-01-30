@@ -4,7 +4,9 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <sys/sem.h>
+#include <signal.h>
 #include "konfiguracja.h"
+#include "kasjer.h"
 
 // Funkcja do uzyskiwania klucza pamięci współdzielonej
 key_t get_shm_key(const char *pathname, int project_id);
@@ -17,6 +19,5 @@ int create_shared_memory(key_t shm_key, size_t size);
 
 // Funkcja do usuwania pamieci wspoldzielonej
 void usun_pamiec_wspoldzielona(int *klient_numer, DaneRekreacyjny *rekreacyjny, int shm_id, int rek_id);
-
 
 #endif
