@@ -20,11 +20,6 @@ double oblicz_srednia(DaneRekreacyjny *dane) {
     return (double)dane->suma_wiekow / dane->liczba_osob;
 }
 
-void ewakuacja(int sig) {
-    printf("Klient: ewakuacja basenu\n");
-    exit(0);  // Klient opuszcza basen
-}
-
 void inicjalizuj_sygnaly() {
     signal(SIGUSR1, ewakuacja);
 }
