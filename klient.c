@@ -33,7 +33,7 @@ void wejdz_na_basen(int wiek, int sem_id, int sem_num, int is_vip, int numer, Da
         // Sprawdzenie czy basen jest otwarty (wartość semafora > 0)
         int sem_val = semctl(sem_id, sem_num, GETVAL);
         if (sem_val == 0) {
-            printf("🚨 Klient #%d: Basen %d jest zamknięty, czekam...\n", numer, sem_num);
+            printf("Klient #%d: Basen %d jest zamknięty, czekam...\n", numer, sem_num);
             sleep(3);
             continue;
         }
