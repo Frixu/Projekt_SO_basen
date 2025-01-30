@@ -67,6 +67,7 @@ int main() {
 
     // Tworzenie procesów dla klientów
     for (int i = 0; i < MAX_KLIENCI; i++) {
+        srand(getpid());
         pid_t pid = fork();
         if (pid < 0) {
             perror("Klient: Błąd przy tworzeniu procesu");
