@@ -82,6 +82,7 @@ int main() {
             struct sembuf op = {0, -1, 0};
             if (semop(sem_id, &op, 1) == -1) {
                 perror("Klient: Błąd przy blokowaniu semafora");
+                killpg(getpgrp(), SIGTERM);
                 exit(1);
             }
 
