@@ -16,12 +16,31 @@ int sem_id, shm_id, rek_id;
 int *klient_numer;
 DaneRekreacyjny *rekreacyjny;
 
+void *czyszczenie_zombie(void *arg) {
+    while (1) {
+        int status;
+        pid_t pid = waitpid(-1, &status, WNOHANG);
+        while (pid > 0) {
+            pid = waitpid(-1, &status, WNOHANG); // Sprawdzenie kolejnych zombie
+        }
+        sleep(2); // Co 2 sekundy sprawdzamy, czy są zombie
+    }
+    return NULL;
+}
+
 int main() {
         srand(getpid());//Inicjalizacja generatora liczb losowych
 
         //Rejestracja sygnałów
         signal(SIGTERM, zamkniecie_obiektu);
         signal(SIGINT, handler_sigint);
+
+        //Uruchomienie wątku do czyszczenia procesów zombie
+        pthread_t zombie_thread;
+        if (pthread_create(&zombie_thread, NULL, czyszczenie_zombie, NULL) != 0) {
+                perror("Błąd przy tworzeniu wątku do czyszczenia procesów zombie");
+                exit(1);
+        }
 
         //Tworznie kluczy
         key_t sem_key = get_sem_key(PATHNAME, 'A');
@@ -139,8 +158,12 @@ int main() {
         wait(NULL);
     }
 
-        //Czekamy na zakonczenie procesu kasjera
-        wait(NULL);
+     // Czekamy na zakończenie procesu kasjera
+    waitpid(kasjer_pid, NULL, 0);
+
+    // Zatrzymanie wątku czyszczenia zombie
+    pthread_cancel(zombie_thread);
+    pthread_join(zombie_thread, NULL);
 
          // Usuwanie pamięci współdzielonej
         usun_pamiec_wspoldzielona(klient_numer, rekreacyjny, shm_id, rek_id);
